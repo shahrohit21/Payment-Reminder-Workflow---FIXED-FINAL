@@ -1,0 +1,1716 @@
+{
+  "name": "Nest Payment Reminder - FIXED FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 05 10 * * 1-7"
+            }
+          ]
+        }
+      },
+      "id": "302b67ef-52de-4393-9308-eb643ea8b936",
+      "name": "Daily 9 AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1728,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "c81dfd0c-3b48-4550-91e5-27cbe79ab867",
+      "name": "Read Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1504,
+        1488
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.remaining_balance }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3c1567e6-8a79-4096-95b1-63a3e5158612",
+      "name": "Filter: Balance > 0",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.Days }}",
+              "rightValue": 61,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1eb9a4a-affc-4f7f-b9a8-3f295b1c75b3",
+      "name": "Filter: Days >= 61",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -1072,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const paymentItems = $input.all();\nconst historyMap = {};\ntry {\n  for (const h of $('Read Master Sheet').all()) {\n    const key = String(h.json['Bill_no.'] || '').trim();\n    if (key) historyMap[key] = h.json;\n  }\n} catch(e) {}\nconst results = [];\nfor (const item of paymentItems) {\n  const bill = String(item.json['Bill_no.'] || '').trim();\n  const h = historyMap[bill] || {};\n  results.push({ json: {\n    ...item.json,\n    First_Reminder_Msg_status:  h.First_Reminder_Msg_status  || '',\n    First_Reminder_Date:        h.First_Reminder_Date        || '',\n    Second_Reminder_Msg_status: h.Second_Reminder_Msg_status || '',\n    Second_Reminder_Date:       h.Second_Reminder_Date       || '',\n    Third_Reminder_Msg_status:  h.Third_Reminder_Msg_status  || '',\n    Third_Reminder_Date:        h.Third_Reminder_Date        || '',\n    Call_Done:                  h.Call_Done                  || '',\n    Call_Date:                  h.Call_Date                  || '',\n    Customer_Response:          h.Customer_Response          || '',\n    Response_Type:              h.Response_Type              || '',\n    Followup_Date:              h.Followup_Date              || '',\n    Last_Updated:               h.Last_Updated               || ''\n  }});\n}\nreturn results;"
+      },
+      "id": "abea11c9-a605-47f3-af4c-a98b428c630b",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = {};\nconst uniqueItems = [];\nfor (const item of $input.all()) {\n  const key = String(item.json['Bill_no.'] || '').trim();\n  if (!seen[key]) { seen[key] = true; uniqueItems.push(item); }\n}\nconst results = [];\nfor (const item of uniqueItems) {\n  const d = item.json;\n  const days = parseInt(d.Days) || 0;\n  const balance = parseFloat(d.remaining_balance) || 0;\n  const firstStatus  = d.First_Reminder_Msg_status  || '';\n  const secondStatus = d.Second_Reminder_Msg_status || '';\n  const thirdStatus  = d.Third_Reminder_Msg_status  || '';\n  const callDone     = d.Call_Done || '';\n  const savedFollowup = d.Followup_Date || '';\n\n  function isFollowupDue(dateStr) {\n    if (!dateStr) return true;\n    const p = dateStr.split('/');\n    if (p.length !== 3) return true;\n    const dt = new Date(p[2] + '-' + p[1] + '-' + p[0]);\n    dt.setHours(0,0,0,0);\n    const today = new Date(); today.setHours(0,0,0,0);\n    return today >= dt;\n  }\n  function addDays(n) {\n    const dt = new Date();\n    dt.setDate(dt.getDate() + n);\n    return String(dt.getDate()).padStart(2,'0') + '/' +\n           String(dt.getMonth()+1).padStart(2,'0') + '/' + dt.getFullYear();\n  }\n\n  let action = 'SKIP', reason = '', next_followup_date = '';\n\n  if (balance <= 0) {\n    action = 'SKIP'; reason = 'Paid';\n  } else if (days >= 90 && callDone !== 'Yes') {\n    action = 'VOICE_CALL'; reason = days + ' days - voice call needed';\n  } else if (days > 60 && days < 90) {\n    if (firstStatus !== 'Sent') {\n      action = 'WHATSAPP_1'; reason = 'First reminder';\n      if (days + 15 < 90)      next_followup_date = addDays(15);\n      else if (days + 7 < 90)  next_followup_date = addDays(7);\n      else                     next_followup_date = addDays(90 - days);\n    } else if (secondStatus !== 'Sent') {\n      if (!isFollowupDue(savedFollowup)) {\n        action = 'SKIP'; reason = 'Waiting: ' + savedFollowup; next_followup_date = savedFollowup;\n      } else {\n        action = 'WHATSAPP_2'; reason = 'Second reminder due';\n        if (days + 7 < 90) next_followup_date = addDays(7);\n        else               next_followup_date = addDays(90 - days);\n      }\n    } else if (thirdStatus !== 'Sent') {\n      if (!isFollowupDue(savedFollowup)) {\n        action = 'SKIP'; reason = 'Waiting: ' + savedFollowup; next_followup_date = savedFollowup;\n      } else {\n        action = 'WHATSAPP_3'; reason = 'Third reminder due';\n        next_followup_date = addDays(90 - days);\n      }\n    } else {\n      action = 'SKIP'; reason = 'All reminders sent'; next_followup_date = savedFollowup;\n    }\n  } else {\n    action = 'SKIP'; reason = 'Days ' + days + ' not in range';\n  }\n  results.push({ json: { ...d, action, action_reason: reason, days_int: days, next_followup_date } });\n}\nreturn results;"
+      },
+      "id": "64d62bc5-423d-4cb8-ba32-9f5d5ae47a51",
+      "name": "Decide Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "WHATSAPP_1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "First Reminder"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "WHATSAPP_2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Second Reminder"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "WHATSAPP_3",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Third Reminder"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "VOICE_CALL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voice Call"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "26311703-d08e-42ce-ad80-796eec06068b",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -400,
+        1456
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "message",
+              "value": "=Hello {{ $json.Party }},\n\n*Payment Reminder - Notice #1*\n\nBill No: {{ $json['Bill_no.'] || 'N/A' }}\nBill Date: {{ $json.Bill_date }}\nTotal Amount: ₹{{ $json.Bill_amount }}\nAmount Paid: ₹{{ $json.Paid }}\n*Balance Due: ₹{{ $json.remaining_balance }}*\nDays Overdue: {{ $json.Days }} days\n\nKindly arrange the payment at the earliest.\n\nThank you!\nTeam Nest",
+              "type": "string"
+            },
+            {
+              "id": "rs1",
+              "name": "reminder_stage",
+              "value": "1",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "566abb74-5cff-4b17-ae9b-048459e8c7eb",
+      "name": "Prepare First Reminder Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -112,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m2",
+              "name": "message",
+              "value": "=Hello {{ $json.Party }},\n\n*Payment Reminder - Notice #2 (Action Required)*\n\nBill No: {{ $json['Bill_no.'] || 'N/A' }}\nBill Date: {{ $json.Bill_date }}\nTotal Amount: ₹{{ $json.Bill_amount }}\n*Balance Due: ₹{{ $json.remaining_balance }}*\nDays Overdue: {{ $json.Days }} days\n\nDespite our previous reminder, payment is still pending. Please clear this immediately.\n\nThank you!\nTeam Nest",
+              "type": "string"
+            },
+            {
+              "id": "rs2",
+              "name": "reminder_stage",
+              "value": "2",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "4b66e54b-1147-4b16-9053-55fac844e1ca",
+      "name": "Prepare Second Reminder Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -112,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m3",
+              "name": "message",
+              "value": "=Hello {{ $json.Party }},\n\n*URGENT - Final Written Reminder #3*\n\nBill No: {{ $json['Bill_no.'] || 'N/A' }}\nBill Date: {{ $json.Bill_date }}\nTotal Amount: ₹{{ $json.Bill_amount }}\n*Balance Due: ₹{{ $json.remaining_balance }}*\nDays Overdue: {{ $json.Days }} days\n\nThis is your FINAL written reminder. If payment not received within 7 days, further action will be initiated.\n\nTeam Nest",
+              "type": "string"
+            },
+            {
+              "id": "rs3",
+              "name": "reminder_stage",
+              "value": "3",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e569ee6e-5d0e-4165-9e7b-2c5605c446b3",
+      "name": "Prepare Third Reminder Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -96,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1007938712398260",
+        "recipientPhoneNumber": "={{ '91' + String($json.Phone_number) }}",
+        "textBody": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "fe60f741-209d-4bca-8b56-0cf3c18e1857",
+      "name": "Send WhatsApp 1",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        896
+      ],
+      "webhookId": "34aa6de1-2dbb-4074-bbf5-558d71dfdc6b",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KMbsnIe1ICiGPlNk",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1007938712398260",
+        "recipientPhoneNumber": "={{ '91' + String($json.Phone_number) }}",
+        "textBody": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "392af69a-8105-40d6-9dec-8e996d2b344e",
+      "name": "Send WhatsApp 2",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        1376
+      ],
+      "webhookId": "35eab39f-cf15-4059-a731-6e2d751013f9",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KMbsnIe1ICiGPlNk",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1007938712398260",
+        "recipientPhoneNumber": "={{ '91' + String($json.Phone_number) }}",
+        "textBody": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "171a3dcf-3648-4bb4-90df-d04708314a07",
+      "name": "Send WhatsApp 3",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        128,
+        1856
+      ],
+      "webhookId": "26360537-4523-4efe-b4b5-7ff548449505",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KMbsnIe1ICiGPlNk",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "First_Reminder_Date": "=\n{{ $now.format('dd/MM/yyyy') }}",
+            "Bill_no": "={{ $json.Bill_no }}",
+            "First_Reminder_Msg_status": "Sent",
+            "Last_Updated": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [
+            "Bill_no"
+          ],
+          "schema": [
+            {
+              "id": "Party",
+              "displayName": "Party",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bill_no",
+              "displayName": "Bill_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Bill_date",
+              "displayName": "Bill_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bill_amount",
+              "displayName": "Bill_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Paid",
+              "displayName": "Paid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "remaining_balance",
+              "displayName": "remaining_balance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Days",
+              "displayName": "Days",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone_number",
+              "displayName": "Phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sman",
+              "displayName": "Sman",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Date",
+              "displayName": "First_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Msg_status",
+              "displayName": "First_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Second_Reminder_Date",
+              "displayName": "Second_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Second_Reminder_Msg_status",
+              "displayName": "Second_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Third_Reminder_Date",
+              "displayName": "Third_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Third_Reminder_Msg_status",
+              "displayName": "Third_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call_Done",
+              "displayName": "Call_Done",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call_Date",
+              "displayName": "Call_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Response",
+              "displayName": "Customer_Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Response_Type",
+              "displayName": "Response_Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Followup_Date",
+              "displayName": "Followup_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last_Updated",
+              "displayName": "Last_Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c9440c9c-8136-456c-bb65-38ba9cef4c01",
+      "name": "Update History: First Reminder",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        96,
+        656
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bill_no.": "={{ $json['Bill_no.'] || '' }}",
+            "Second_Reminder_Date": "={{ $now.format('dd/MM/yyyy') }}",
+            "Second_Reminder_Msg_status": "=Sent",
+            "Followup_Date": "={{ $json.next_followup_date || '' }}",
+            "Last_Updated": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [
+            "Bill_no."
+          ],
+          "schema": [
+            {
+              "id": "Bill_no.",
+              "displayName": "Bill_no.",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Date",
+              "displayName": "First_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "First_Reminder_Msg_status",
+              "displayName": "First_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Date",
+              "displayName": "Second_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Msg_status",
+              "displayName": "Second_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Date",
+              "displayName": "Third_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Msg_status",
+              "displayName": "Third_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Done",
+              "displayName": "Call_Done",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Date",
+              "displayName": "Call_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer_Response",
+              "displayName": "Customer_Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Response_Type",
+              "displayName": "Response_Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Followup_Date",
+              "displayName": "Followup_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Last_Updated",
+              "displayName": "Last_Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "be70fdd8-2a4c-4ba7-9c92-c066acdfae43",
+      "name": "Update History: Second Reminder",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        96,
+        1152
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bill_no.": "={{ $json['Bill_no.'] || '' }}",
+            "Third_Reminder_Date": "={{ $now.format('dd/MM/yyyy') }}",
+            "Third_Reminder_Msg_status": "=Sent",
+            "Followup_Date": "={{ $json.next_followup_date || '' }}",
+            "Last_Updated": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [
+            "Bill_no."
+          ],
+          "schema": [
+            {
+              "id": "Bill_no.",
+              "displayName": "Bill_no.",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Date",
+              "displayName": "First_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "First_Reminder_Msg_status",
+              "displayName": "First_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Date",
+              "displayName": "Second_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Msg_status",
+              "displayName": "Second_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Date",
+              "displayName": "Third_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Msg_status",
+              "displayName": "Third_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Done",
+              "displayName": "Call_Done",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Date",
+              "displayName": "Call_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer_Response",
+              "displayName": "Customer_Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Response_Type",
+              "displayName": "Response_Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Followup_Date",
+              "displayName": "Followup_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Last_Updated",
+              "displayName": "Last_Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "25d88d8f-dfcf-4860-97b2-a00c93766d55",
+      "name": "Update History: Third Reminder",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        112,
+        1632
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "phone_number",
+              "value": "={{ $json.Phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "v2",
+              "name": "customer_name",
+              "value": "={{ $json.Party }}",
+              "type": "string"
+            },
+            {
+              "id": "v3",
+              "name": "amount",
+              "value": "={{ $json.remaining_balance }}",
+              "type": "string"
+            },
+            {
+              "id": "v4",
+              "name": "bill_no",
+              "value": "={{ $json['Bill_no.'] || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "v5",
+              "name": "days_overdue",
+              "value": "={{ $json.Days }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "61a5298c-da8e-4780-b13a-b718c8fc298a",
+      "name": "Prepare Voice Call Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -96,
+        2192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.retellai.com/v2/create-phone-call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_RETELL_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "67e95fcf-0370-470c-8481-a3c2dcca8659",
+      "name": "Trigger AI Voice Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        2192
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bill_no.": "={{ $json['Bill_no.'] || '' }}",
+            "Call_Done": "=Yes",
+            "Call_Date": "={{ $now.format('dd/MM/yyyy') }}",
+            "Last_Updated": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [
+            "Bill_no."
+          ],
+          "schema": [
+            {
+              "id": "Bill_no.",
+              "displayName": "Bill_no.",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Date",
+              "displayName": "First_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "First_Reminder_Msg_status",
+              "displayName": "First_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Date",
+              "displayName": "Second_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Msg_status",
+              "displayName": "Second_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Date",
+              "displayName": "Third_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Msg_status",
+              "displayName": "Third_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Done",
+              "displayName": "Call_Done",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Date",
+              "displayName": "Call_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer_Response",
+              "displayName": "Customer_Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Response_Type",
+              "displayName": "Response_Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Followup_Date",
+              "displayName": "Followup_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Last_Updated",
+              "displayName": "Last_Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8bf304ba-be34-4112-8207-ed6f6d24e64d",
+      "name": "Update History: Call Triggered",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        2176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "b681d9fc-76da-40af-9a80-6a27c0b42399",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"Customer_Response\":{\"type\":\"string\"},\"Response_Type\":{\"type\":\"string\",\"enum\":[\"PAYMENT_DONE\",\"PROMISE_TO_PAY\",\"NEED_TIME\",\"DISPUTE\",\"CALLBACK_REQUESTED\",\"NOT_AVAILABLE\",\"NO_ANSWER\",\"NO_RESPONSE\",\"OTHER\"]},\"Followup_Date\":{\"type\":\"string\"},\"Callback_Minutes\":{\"type\":\"number\"}}}"
+      },
+      "id": "39d5e4ee-7e8e-4a77-8425-1c8b8bea5fee",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        912,
+        2432
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.customer_response || $json.response || $json.transcript || 'No response' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Classify payment call response: PAYMENT_DONE, PROMISE_TO_PAY, NEED_TIME, DISPUTE, CALLBACK_REQUESTED, NOT_AVAILABLE, NO_ANSWER, NO_RESPONSE, OTHER. Extract Followup_Date (dd/MM/yyyy) and Callback_Minutes if needed. Today: {{ $now.format('dd/MM/yyyy') }}."
+        }
+      },
+      "id": "c5b76b8a-f1f4-481d-b25f-cc3aef6a08b3",
+      "name": "Classify Customer Response",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        656,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0",
+          "mode": "list",
+          "cachedResultName": "Reminder_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Master Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H5FsbfmNz77t7GjLd3MIEIcEBr8-RNOWBqK4I_ZnPq0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bill_no.": "={{ $('Prepare Voice Call Data').item.json['Bill_no.'] || '' }}",
+            "Customer_Response": "={{ $json.output?.Customer_Response || '' }}",
+            "Response_Type": "={{ $json.output?.Response_Type || '' }}",
+            "Followup_Date": "={{ $json.output?.Followup_Date || '' }}",
+            "Last_Updated": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [
+            "Bill_no."
+          ],
+          "schema": [
+            {
+              "id": "Bill_no.",
+              "displayName": "Bill_no.",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Reminder_Date",
+              "displayName": "First_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "First_Reminder_Msg_status",
+              "displayName": "First_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Date",
+              "displayName": "Second_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Second_Reminder_Msg_status",
+              "displayName": "Second_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Date",
+              "displayName": "Third_Reminder_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Third_Reminder_Msg_status",
+              "displayName": "Third_Reminder_Msg_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Done",
+              "displayName": "Call_Done",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Call_Date",
+              "displayName": "Call_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer_Response",
+              "displayName": "Customer_Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Response_Type",
+              "displayName": "Response_Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Followup_Date",
+              "displayName": "Followup_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Last_Updated",
+              "displayName": "Last_Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5c77ece5-e7a2-467f-9c38-7f7f707297ec",
+      "name": "Update History: Call Response",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        992,
+        2176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Ns5euM2DIua9rAVF",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 9 AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Master Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Master Sheet": {
+      "main": [
+        [
+          {
+            "node": "Filter: Balance > 0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Balance > 0": {
+      "main": [
+        [
+          {
+            "node": "Filter: Days >= 61",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Days >= 61": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Decide Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Action": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Prepare First Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Second Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Third Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Voice Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare First Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp 1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update History: First Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Second Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp 2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update History: Second Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Third Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp 3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update History: Third Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Voice Call Data": {
+      "main": [
+        [
+          {
+            "node": "Trigger AI Voice Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger AI Voice Call": {
+      "main": [
+        [
+          {
+            "node": "Update History: Call Triggered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update History: Call Triggered": {
+      "main": [
+        [
+          {
+            "node": "Classify Customer Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Customer Response",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify Customer Response",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Customer Response": {
+      "main": [
+        [
+          {
+            "node": "Update History: Call Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9e3d61cb-01b5-44ce-a9f1-9379c4fd807c",
+  "meta": {
+    "instanceId": "3eb3160ad3988df8cbee346fc61f165204f32d5fb4a1b1fe3a18636b4a4d8aeb"
+  },
+  "id": "8vWsfZQw3DD6w6Sf",
+  "tags": []
+}
